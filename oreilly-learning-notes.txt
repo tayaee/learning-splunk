@@ -1,0 +1,393 @@
+OReilly Splunk Training
+
+Segment 1: Splunk Search Processing Language (SPL) (25 minutes)
+	SPL
+	ITSI premium addon
+	SES premium addon
+	SOAR security ochestration (formerly phantom)
+
+	Fields
+	index="main" sourcetype=access_combined_wcookie | stats count by status
+
+	Logical expr
+	index="main" sourcetype=vendor_sales Code = D OR Code = E | top VendorID
+
+	Stats
+	index="main" sourcetype=access_combined_wcookie | stats avg(bytes) AS Average_Bytes_Transferred, sum(bytes) AS Totale_Bytes_transferred
+
+	Chart
+	index=... sourcetype=... | chart count by categoryId, status
+
+	Timechart
+	index=... sourcetype=... | timechart count span=1d by categoryId usenull=f
+
+	Eval
+	index=... sourcetype=... | eval Kbytes = bytes / 1024
+
+	Demo
+
+	Top splunk bar
+		Username
+			Account Settings
+			Preferences
+		Messages
+		Settings
+			Many KBs
+		Activity
+			Jobs
+			Triggered Alerts
+
+	Apps
+		Help parse new data format
+
+	Creating an app (a config file) as admin
+		New app
+			Name: CalicoGames
+			Folder name: calicogames
+			Version: 1.0.0
+			Visible: Yes
+			Author: Soonki
+			Description:
+			Template: barebones
+			Save
+
+	Open the app
+		See app bar (below splunk bar)
+			Search Anlaytics Datasets Reports Alerts Dashboard
+
+	"Search & Report" is a default app provided by splunk
+
+	Preference > SPL Editor
+
+	Settings > Add Data (upload data.zip into 'main' index)
+
+	Ready for search.
+
+	Hierarchy
+		App (log format)
+			Index (container)
+				Search
+
+	Modes
+		Fast Mode
+		Smart Mode
+		Verbose Mode
+
+	Interesting fields
+		Pre-configured TOP searches
+
+	sourcetype
+		access_combined_wcookie		// splunk generate source type by content
+
+	statistical command
+		index="_internal"
+		| stats count
+
+	Patterns is enabled in verbose mode in the search result
+
+	index=... | top FIELD
+
+	index=... sourcetype=... AcctID = 6*
+
+	index=... sourcetype=... bytes > 3000
+
+	index=... sourcetype=... | stats max(bytes)
+
+	index=... sourcetype=... | stats max(bytes) as "Biggest Response"
+
+	index=... sourcetype=... | stats max(bytes) as "Biggest Response", min(byte) AS "Smallest Response", median(bytes) AS "Median Response"
+
+	Eval (add a new calculated field)
+
+		index=... sourcetype=... | eval KBytes = bytes / 1024
+
+	Case
+
+		index=... sourcetype=... | eval CATEGORY = case(status >= 500, "5xx", status >= 400, "4xx", status >= 300, "3xx", 1==1, "OK")
+
+		index=... sourcetype=... | eval RESULT = if (cond, value_for_true, value_for_false)
+
+		in(...)
+		like(...)
+
+		... | eval isLocal=if(cidrmatch("123.132.32.0/25",ip), "local", "not local")
+
+		https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/CommonEvalFunctions
+
+Segment 2: Creating Field Extractions and Using Lookups (25 minutes)
+
+	3 ways
+		field extractor wizard
+		spl command rex
+		using regex
+
+	lookups
+
+		index=... sourcetype=... "Failed password for invalid user"		// this result does not have user full name field
+
+		1 wizard
+
+			Click +Extract New Fields
+				Pick up a sample event
+				Use regex, or delim
+				Select Fields
+					Identify login id => USERNAME
+
+		2 rex
+			index=... sourcetype=... "Failed password for invalid user"
+			| rex "from (?<IPADDRESS>\d+\.\d+\.\d+\.\d+)"
+
+			index=... sourcetype=... "Failed password for invalid user"
+			| rex "from (?<IPADDRESS>\d+\.\d+\.\d+\.\d+)"
+			| iplocation IPADDRESS				// splunk builtin, this adds City, Country, IPADDRESS, Region, lat, ...
+
+			index=... sourcetype=... "Failed password for invalid user"
+			| rex "from (?<IPADDRESS>\d+\.\d+\.\d+\.\d+)"
+			| iplocation IPADDRESS				// splunk builtin, this adds City, Country, IPADDRESS, Region, lat, ...
+			| geostats count by Region			// Adds a map. Visualization with a map
+
+			index=... sourcetype=... "Failed password for invalid user"
+			| rex "from (?<IPADDRESS>\d+\.\d+\.\d+\.\d+)"
+			| iplocation IPADDRESS				// splunk builtin, this adds City, Country, IPADDRESS, Region, lat, ...
+			| geostats count by Country			// Adds a map. Visualization with a map
+
+		3 lookup (an external csv), what if results has a product id but do not have sale-price?
+			settings  > lookups > lookup table fies > +new > choose file (prices.csv)
+
+			| inputlookup prices.csv
+				code, price, productId, product_name, sale_price
+
+			index=... sourcetype=...
+			| lookup prices.csv <join-field>
+
+			index=... sourcetype=... action=purchase AND productId = *
+			| lookup prices.csv productId
+
+			index=... sourcetype=... action=purchase AND productId = *
+			| lookup prices.csv productId
+			| stats sum(sale_price) by product_name				// sale_price is from lookup csv file
+
+Segment 3: Creating and Scheduling Splunk Reports (50 minutes)
+
+	Reports
+
+	Field extraction, lookup table are private to you. Others cannot see it.
+
+	Report permissions
+		1. app level
+		2. role level
+
+	Need 'power user'
+
+	Run report as you as owner
+	Run report as the user who runs the report
+
+	embedding reports (not requiring splunk access)
+
+	Edit Acceleration // use pre-computed data
+
+	Settings > Lookup
+		...
+
+	Settings > Automatic lookup
+		Name: prices_autolookup
+		Lookup table: prices <--- added above
+		Applyto: soruce type
+		named: <sourcetype name>
+		Lookup input fields: productId = productId
+	Lookup output fields:
+		sale_price = sale_price
+		product_name = product_name
+
+	Now, search. Chagne 1 to 2
+
+		1
+			index=... sourcetype=... action=purchase AND productId = *
+			| lookup prices.csv productId
+			| stats sum(sale_price) by product_name				// sale_price is from lookup csv file
+
+		2
+
+			index=... sourcetype=... action=purchase AND productId = *
+			| stats sum(sale_price) by product_name				// sale_price is from lookup csv file
+
+	...
+	| stats count by status
+
+	... status != 200
+	| stats count by status
+
+	Save As > Save As Report
+		Title: Caligo games
+		Description: ...
+		Content: Pie + Table
+		Time Range: YES
+		View
+
+	Go to Reports tab.
+
+	More Info button to view meta data.
+
+	Edit Permission. Owner ==> App
+		Run As : Owner, User
+		Find grained Read/Write for each user
+			everyone			r	w
+			admin				r	w
+			can_delete
+			power
+			splunk-system-role
+			user
+	Edit Schedule
+		Schedule Report
+			Schedule: Run every week
+				At ..
+
+			Cron is better
+				0 6 * * *			// 6AM
+
+	Action
+		log event
+		output result
+		run script
+		send email
+		send splunk mobile
+		webhook
+		manage actions
+
+	Email tokens
+		$name$
+
+		Include
+			Link to report
+			link to result
+			search string
+			inline
+			attach csv
+			attach pdf
+			allow empty attachment
+			...
+
+	smtp server setup is reuired in local splunk enterprise
+
+Segment 4: Creating Alerts (50 minutes)
+
+	use cases
+		alert => open a incident ticket
+		download a new app for a new feature, and create a new alert
+		threshold hit? => alert
+		a condition met => alert
+
+	search
+	schedule how often you want to check
+	setup trigger and throttling
+	add actions
+
+	search > save as > alert
+
+		trigger conditions:
+			number of results
+			number of XXX
+			custom <=== use full. search within the search. called, 'sub-search'.
+
+	alert demo
+		index... sourcetype=... status = 5*		// all errors
+		| stats count AS server_errors
+
+		Preview > Save As > Save As Alert
+			Title: Server Error Alert
+			Description: ...
+			Permissions:
+				[Private]	Shared in App
+			Alert type:
+				[Scheduled]	Real-time	<== Real-time is usually disabled by admin
+			Cron: 0 */5 * * *		// every 5 mins
+		Trigger conditions
+			Trigger alert when:
+				Custom
+					"search server_errors > 100"
+			Trigger
+				[Once]		[For each result]
+			Throttle	[v]
+			Suppress trigger for 60 mins
+		Action
+			Email
+				$name$
+				$server.serverName$
+				$owner$
+
+				https://docs.splunk.com/Documentation/Splunk/latest/Alert/EmailNotificationTokens
+
+		trial version : 60 days
+
+	how to generate uuid in alert title
+
+	index... sourcetype=... status = 5*		// all errors
+		| stats count AS server_errors
+		| alert_id = random()
+
+		title: $result.alert_id$
+
+
+Segment 5: Creating Dashboards and Customizing Visualizations (50 minutes)
+
+	Create a dashboard
+
+		Classic
+			Full drill down capabilities
+			Full token capabilities
+			Can schedule PDF delivery, and export pdf
+			Custom JS and CSS support
+
+		Studio
+			Shape can be added
+			Image can be added or linked
+			Custom icons can be added
+			Customizable background
+			Abs and grid layout
+
+		Go with Studio first.
+		Token base, PDF, then go with classic.
+
+	Improving dashboard performance
+
+		Limit the # of panels
+		Utilze base and chained search
+		Use scheduled report as data sources
+		Avoid frequent auto refresh
+
+	props.conf (new parsing rules)
+
+	Search > Save As > Save Panel to New Dashboard
+
+	Choose Classic Dashboards
+	Visualiztion Table: Leave Stats table
+	View Dashboard
+
+	Edit Dashboard
+		Select visualization (single, etc)
+
+	new dash
+		index... status != 200
+		| stats count
+
+		Save As >Save Panel to Existing Dashboard
+
+		Now two panels
+		...
+		| top categoryId
+
+		...
+		| top categoryId showperc=f
+
+		...
+		| timechart count by status
+
+	Edit Dashboard > XML editing...
+
+	Geo map
+
+		...
+		| iplocation clientip
+		| geostats sum(sale_price) by Country
+
+Q&A (5 minutes)
